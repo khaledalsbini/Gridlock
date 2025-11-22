@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gridlock Game Prototype</title>
+    <style>
+        /* CSS for Styling */
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 0;
+            background-color: #f0f0f0;
+        }
+        h1 { color: #333; }
+        #game-board {
+            display: grid;
+            grid-template-columns: repeat(7, 60px);
+            grid-template-rows: repeat(7, 60px);
+            border: 2px solid #333;
+            background-color: #fff;
+        }
+        .cell {
+            width: 60px;
+            height: 60px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .cell .piece {
+            width: 80%;
+            height: 80%;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .player-B { background-color: #3498db; } /* Blue */
+        .player-R { background-color: #e74c3c; } /* Red */
+        .dead {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        .selected { border: 3px solid #f1c40f; } /* Yellow highlight */
+        #game-status {
+            margin-top: 20px;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        #restart-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+        }
+        #rules-container {
+            margin-top: 30px;
+            padding: 15px 30px;
+            background-color: #ffffff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            max-width: 600px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        #rules-container h2 { text-align: center; color: #333; }
+        #rules-container ul { padding-left: 20px; }
+        #rules-container li { margin-bottom: 10px; line-height: 1.4; }
+    </style>
+</head>
+<body>
+
+    <h1>Gridlock</h1>
+    <div id="game-status"></div>
+    <div id="game-board"></div>
+    <button id="restart-button">Restart Game</button>
+
+    <div id="rules-container">
+        <h2>How to Play</h2>
+        <ul>
+            <li><strong>Objective:</strong> Be the first player to move one of your pieces to the opponent's starting row.</li>
+            <li><strong>Turns:</strong> Blue moves first. Players take turns moving one piece at a time.</li>
+            <li><strong>Movement:</strong> Click one of your pieces to select it, then click an empty adjacent square (up, down, left, or right) to move. Diagonals are not allowed.</li>
+            <li><strong>The Twist:</strong> After a piece moves, the square it came from is permanently destroyed (turns gray) and cannot be entered by any piece for the rest of the game.</li>
+            <li><strong>Winning:</strong> You win if you reach the opponent's back row, OR if your opponent has no legal moves on their turn.</li>
+        </ul>
+    </div>
+
+    <script>
+        // JavaScript for Game Logic
+        const BOARD_SIZE = 7;
+        const gameBoard = document.getElementById('game-board');
+        const gameStatus = document.getElementById('game-status');
+        const restartButton = document.getElementById('restart-button');
+
+        let boardState;
+        let currentPlayer;
+        let selectedPiece = null;
+        let gameOver = false;
+
+        function initializeGame() {
+            boardState = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
+            for (let i = 2; i < 5; i++) boardState[0][i] = 'R';
+            for (let i = 2; i < 5; i++) boardState[BOARD_SIZE - 1][i] = 'B';
+            currentPlayer = 'B';
+            selectedPiece = null;
+            gameOver = false;
+            renderBoard();
+            updateStatus();
+        }
+
+        function renderBoard() {
+            gameBoard.innerHTML = '';
+            for (let row = 0; row < BOARD_SIZE; row++) {
+                for (let col = 0; col < BOARD_SIZE; col++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    const pieceType = boardState[row][col];
+                    if (pieceType) {
+                        if (pieceType === 'X') {
+                            cell.classList.add('dead');
+                        } else {
+                            const piece = document.createElement('div');
+                            piece.classList.add('piece', `player-${pieceType}`);
+                            cell.appendChild(piece);
+                        }
+                    }
+                    if (selectedPiece && selectedPiece.row === row && selectedPiece.col === col) {
+                        cell.classList.add('selected');
+                    }
+                    gameBoard.appendChild(cell);
+                }
+            }
+        }
+
+        function updateStatus() {
+            if (gameOver) {
+                gameStatus.textContent = `Player ${currentPlayer} wins!`;
+            } else {
+                gameStatus.textContent = `Player ${currentPlayer}'s turn`;
+            }
+        }
+        
+        function isValidMove(startRow, startCol, endRow, endCol) {
+            if (boardState[endRow][endCol] !== null) return false;
+            const rowDiff = Math.abs(startRow - endRow);
+            const colDiff = Math.abs(startCol - endCol);
+            return (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1);
+        }
+
+        function checkWin() {
+            for (let col = 0; col < BOARD_SIZE; col++) {
+                if (boardState[0][col] === 'B') return true;
+            }
+            for (let col = 0; col < BOARD_SIZE; col++) {
+                if (boardState[BOARD_SIZE - 1][col] === 'R') return true;
+            }
+            return false;
+        }
+
+        // NEW FUNCTION: Checks if a player has any possible moves
+        function hasValidMoves(player) {
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    if (boardState[r][c] === player) {
+                        const potentialMoves = [
+                            { row: r - 1, col: c }, { row: r + 1, col: c },
+                            { row: r, col: c - 1 }, { row: r, col: c + 1 }
+                        ];
+                        for (const move of potentialMoves) {
+                            if (move.row >= 0 && move.row < BOARD_SIZE && move.col >= 0 && move.col < BOARD_SIZE &&
+                                boardState[move.row][move.col] === null) {
+                                return true; // Found at least one valid move
+                            }
+                        }
+                    }
+                }
+            }
+            return false; // No valid moves found for any piece
+        }
+
+        gameBoard.addEventListener('click', (event) => {
+            if (gameOver) return;
+            const cell = event.target.closest('.cell');
+            if (!cell) return;
+            const row = parseInt(cell.dataset.row);
+            const col = parseInt(cell.dataset.col);
+
+            if (selectedPiece) {
+                if (isValidMove(selectedPiece.row, selectedPiece.col, row, col)) {
+                    boardState[row][col] = currentPlayer;
+                    boardState[selectedPiece.row][selectedPiece.col] = 'X';
+                    
+                    if (checkWin()) {
+                        gameOver = true;
+                    } else {
+                        // Switch player and then check if the new player is stuck
+                        currentPlayer = (currentPlayer === 'B') ? 'R' : 'B';
+                        if (!hasValidMoves(currentPlayer)) {
+                            gameOver = true;
+                            // The new player is stuck, so the previous player wins.
+                            // Switch back to show the correct winner message.
+                            currentPlayer = (currentPlayer === 'B') ? 'R' : 'B';
+                        }
+                    }
+                    selectedPiece = null;
+                } else {
+                    selectedPiece = null;
+                }
+            } else {
+                if (boardState[row][col] === currentPlayer) {
+                    selectedPiece = { row, col };
+                }
+            }
+            renderBoard();
+            updateStatus();
+        });
+
+        restartButton.addEventListener('click', initializeGame);
+        initializeGame();
+    </script>
+</body>
+</html>
